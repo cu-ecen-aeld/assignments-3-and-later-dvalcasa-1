@@ -1,5 +1,12 @@
 #include "systemcalls.h"
 
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+
+
 /**
  * @param cmd the command to execute with system()
  * @return true if the command in @param cmd was executed
@@ -11,11 +18,16 @@ bool do_system(const char *cmd)
 {
 
 /*
- * TODO  add your code here
  *  Call the system() function with the command set in the cmd
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
+    if(system(cmd) != 0) {
+        printf("error : system function with command %s\n", cmd);
+        perror("system function");
+        
+        return false;
+    }
 
     return true;
 }
@@ -47,10 +59,9 @@ bool do_exec(int count, ...)
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
-    command[count] = command[count];
+    //command[count] = command[count];
 
 /*
- * TODO:
  *   Execute a system command by calling fork, execv(),
  *   and wait instead of system (see LSP page 161).
  *   Use the command[0] as the full path to the command to execute
@@ -59,6 +70,41 @@ bool do_exec(int count, ...)
  *
 */
 
+    fflush(stdout);
+    char* path = command[0];
+
+    int status; 
+    pid_t pid = fork(); 
+    
+    if (pid == -1) {
+    	printf("error : fork\n");
+    	perror("fork");
+    	
+    	return false;
+    } 
+    else if (pid == 0) {
+	
+        int ret = execv(path, command);
+        if(ret == -1) {
+            printf("error : execv with path '%s'\n", path);
+            perror("perror : execv ");
+	    
+	    exit(1);
+	}
+    }
+    
+    if (waitpid(pid, &status, 0) == -1) {
+    	printf("error : waitpid - pid = %d", pid);
+    	perror("waitpid");
+    
+    	return false;
+    } else if (status != 0) {
+        printf("error : pid = %d - status = %d\n", pid, status);
+        perror("perror : waitpid statut");
+        
+        return false;
+    }
+    
     va_end(args);
 
     return true;
@@ -82,16 +128,61 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
-    command[count] = command[count];
+    //command[count] = command[count];
 
 
 /*
- * TODO
  *   Call execv, but first using https://stackoverflow.com/a/13784315/1446624 as a refernce,
  *   redirect standard out to a file specified by outputfile.
  *   The rest of the behaviour is same as do_exec()
  *
 */
+    fflush(stdout);
+    char* path = command[0];
+
+    int status; 
+    pid_t pid = fork(); 
+    
+    if (pid == -1) {
+    	printf("error : fork\n");
+    	perror("fork");
+    	
+    	return false;
+    } 
+    else if (pid == 0) {
+
+    	int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);
+	if (fd < 0) { 
+	    perror("open"); 
+	    return false; 
+	}
+	if (dup2(fd, 1) < 0) 
+	{
+	    perror("dup2"); 
+	    return false; 
+	}
+        close(fd);
+
+        int ret = execvp(path, command);
+        if(ret == -1) {
+            printf("error : execv with path '%s'\n", path);
+            perror("perror : execv ");
+	    
+	    exit(1);
+	}
+    }
+    
+    if (waitpid(pid, &status, 0) == -1) {
+    	printf("error : waitpid");
+    	perror("waitpid");
+    
+    	return false;
+    } else if (status != 0) {
+        printf("error : pid = %d - WIFEXITED = %d\n", pid, status);
+        perror("waitpid statut");
+        
+        return false;
+    }
 
     va_end(args);
 
